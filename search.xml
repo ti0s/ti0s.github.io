@@ -4,52 +4,25 @@
   
     
     <entry>
-      <title>typora-vue-theme主题介绍</title>
-      <link href="/posts/1001/"/>
-      <url>/posts/1001/</url>
+      <title>使用TP6开发一套渗透测试报告生成系统</title>
+      <link href="/posts/1001.html"/>
+      <url>/posts/1001.html</url>
       
-        <content type="html"><![CDATA[]]></content>
+        <content type="html"><![CDATA[<blockquote><p>安服日常工作，每次客户现场扫描发现漏洞很多，可每次晚上都要加班输出报告。</p><p>有时一种类型漏洞较多，写的混，还要重新输入，所以有了开发渗透测试报告生成的想法。</p><p>正常思路: 添加项目-》添加资产-》添加漏洞-》导出报表</p></blockquote><h4 id="一、前期准备"><a href="#一、前期准备" class="headerlink" title="一、前期准备"></a>一、前期准备</h4><h5 id="1-功能"><a href="#1-功能" class="headerlink" title="1.功能"></a>1.功能</h5><p>普通用户：登录、添加项目、添加资产、添加漏洞、添加漏洞类型</p><p>管理员：管理用户、项目审核、日志查看、报告模板管理</p><h5 id="2-工具"><a href="#2-工具" class="headerlink" title="2.工具"></a>2.工具</h5><p>架构: thinkphp6+mysql+PearAdmin+PHPOffice</p><p>开发: PHPStorm、Navicat、ApiPost7</p><h4 id="二、开发过程"><a href="#二、开发过程" class="headerlink" title="二、开发过程"></a>二、开发过程</h4><h5 id="1-API接口"><a href="#1-API接口" class="headerlink" title="1.API接口"></a>1.API接口</h5><p>通过Api.php 控制器 调取参数act通过parse_name转换驼峰格式</p><pre class="line-numbers language-php" data-language="php"><code class="language-php">api 路由<span class="token class-name static-context">Route</span><span class="token operator">::</span><span class="token function">rule</span><span class="token punctuation">(</span><span class="token string double-quoted-string">"api/v1/:act"</span><span class="token punctuation">,</span><span class="token string double-quoted-string">"Api/index"</span><span class="token punctuation">,</span><span class="token string double-quoted-string">"POST"</span><span class="token punctuation">)</span><span class="token operator">-></span><span class="token function">ajax</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token operator">-></span><span class="token function">pattern</span><span class="token punctuation">(</span><span class="token punctuation">[</span><span class="token string single-quoted-string">'act'</span> <span class="token operator">=></span> <span class="token string single-quoted-string">'.*'</span><span class="token punctuation">]</span><span class="token punctuation">)</span><span class="token punctuation">;</span><span aria-hidden="true" class="line-numbers-rows"><span></span><span></span></span></code></pre><p>例如: <code>/api/v1/pte/bug_list</code></p><p>则调用 <code>Pte.php</code> 控制器 <code>bugList</code>方法</p><p>Api.php 控制器处理逻辑</p><pre class="line-numbers language-PHP" data-language="PHP"><code class="language-PHP">&lt;?phppublic function index()&#123;        $request &#x3D; request()-&gt;param(&#39;act&#39;);        $request &#x3D; explode(&quot;&#x2F;&quot;,trim($request,&quot;&#x2F;&quot;));        if(count($request) &#x3D;&#x3D; 1)&#123;            $controller &#x3D; &quot;Common&quot;; # 默认控制器            $method &#x3D; parse_name($request[0],1,false);        &#125;elseif(count($request) &#x3D;&#x3D; 2)&#123;            $controller &#x3D; parse_name($request[0],1,true);            $method &#x3D; parse_name($request[1],1,false);        &#125;else&#123;            return error(&quot;Route not exists.&quot;);        &#125;        try &#123;            $controller &#x3D; &#39;\\app\\api\\&#39;.$controller;            $controllerClass &#x3D; invoke($controller);            if (($controllerClass instanceof Base) &#x3D;&#x3D;&#x3D; false) &#123;                return error(&quot;Extend &#39;Base&#39; controller.&quot;);            &#125;        &#125; catch (ClassNotFoundException $e) &#123;            return error(&quot;Controller not exists.&quot;);        &#125;        if(method_exists($controllerClass,$method))&#123;            $controllerClass-&gt;$method();        &#125;else&#123;            return error(&quot;Method not exists.&quot;);        &#125;&#125;?&gt;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre><h5 id="2-漏洞列表"><a href="#2-漏洞列表" class="headerlink" title="2.漏洞列表"></a>2.漏洞列表</h5><pre class="line-numbers language-PHP" data-language="PHP"><code class="language-PHP">&lt;?php# fileName: Pte.phppublic function bug_list()&#123;  $info &#x3D; Db::name(&quot;pte_list&quot;)            -&gt;where(&quot;id&quot;,$this-&gt;post[&#39;id&#39;])            -&gt;find();    $info or $this-&gt;error(&quot;项目信息不存在!&quot;);$bugType &#x3D; [      &quot;Web安全&quot; ,      &quot;网络传输安全&quot;  ,      &quot;业务逻辑安全&quot;   ,      &quot;中间件安全&quot; ,      &quot;服务器安全&quot;    ];    $list &#x3D; Db::name(&quot;pte_bug&quot;)      -&gt;field(&quot;id,pte_id,bug_level,bug_type,(select &#96;name&#96; from sf_pte_bug_type where id &#x3D; bug_type_info) as &#96;bug_info&#96;&quot;)      -&gt;where(&quot;is_delete&quot;,0)      -&gt;where(&quot;pte_id&quot;,$this-&gt;post[&#39;id&#39;])      -&gt;order(&quot;create_time&quot;,&quot;DESC&quot;)      -&gt;order(&quot;id&quot;,&quot;DESC&quot;)      -&gt;withAttr(&quot;create_time&quot;,function ($val) &#123;          return date(&quot;Y-m-d H:i:s&quot;,$val);      &#125;)      -&gt;withAttr(&quot;bug_type&quot;,function ($val) use( $bugType ) &#123;          return $bugType[intval($val-1)];      &#125;)      -&gt;select();  return result($list);&#125;?&gt;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre><h5 id="3-生成报告"><a href="#3-生成报告" class="headerlink" title="3.生成报告"></a>3.生成报告</h5><p>使用的是PHPWORD框架 使用composer安装框架</p><pre class="line-numbers language-none"><code class="language-none"># 下载安装程序php -r &quot;copy(&#39;https:&#x2F;&#x2F;install.phpcomposer.com&#x2F;installer&#39;, &#39;composer-setup.php&#39;);&quot;# 安装composerphp composer-setup.php# 删除安装程序php -r &quot;unlink(&#39;composer-setup.php&#39;);&quot;# 移动安装的程序sudo mv composer.phar &#x2F;usr&#x2F;local&#x2F;bin&#x2F;composer# 拉取phpword框架(--ignore-platform-reqs 参数是不指定版本的【推荐】)composer require --ignore-platform-reqs phpoffice&#x2F;phpword然后直接包含程序就可以了include_once &quot;vendor&#x2F;autoload.php&quot;;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre><p>创建模板 然后使用框架引入 然后使用变量替换</p><pre class="line-numbers language-PHP" data-language="PHP"><code class="language-PHP">&lt;?php    $doc &#x3D; new \PhpOffice\PhpWord\TemplateProcessor(&#39;..&#x2F;template&#x2F;pte.docx&#39;);    $doc-&gt;setValue(&#39;unit_name&#39;,&quot;XXX单位&quot;);    $doc-&gt;setValue(&#39;today_time&#39;,&quot;2021-07-06&quot;);    $doc-&gt;setValue(&#39;project_name&#39;,&quot;XXX项目&quot;);    $doc-&gt;setValue(&#39;todayTime&#39;,date(&quot;Ymd&quot;,time()));    $doc-&gt;setValue(&#39;create_user&#39;,&quot;Admin&quot;);    $doc-&gt;setValue(&#39;unit_people&#39;,&quot;甲方对接人&quot;);    $doc-&gt;setValue(&#39;yeMei&#39;,date(&quot;Ym&quot;,time()));    $doc-&gt;setValue(&#39;start_time&#39;,&quot;2021-07-01&quot;);    $doc-&gt;setValue(&#39;end_time&#39;,&quot;2021-07-06&quot;);?&gt;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre><img src="https://img.ti0s.com/privacy/2023-04-27/1682577817627_eUH9pE.png" alt="报告模板" style="zoom:50%;" /><img src="https://img.ti0s.com/privacy/2023-04-27/1682577884319_YmsOuQ.png" alt="漏洞模板" style="zoom:50%;" /><p>从 ${FX_BUG_INFO} 到 ${&#x2F;FX_BUG_INFO} 创建的块 可以根据漏洞数量进行复制</p><pre class="line-numbers language-PHP" data-language="PHP"><code class="language-PHP">&lt;?php# 复制块方法# $bugInfo 变量为从数据库查询出的数据数组$rows&#x3D;count($bugInfo);# 复制块$doc-&gt;cloneBlock(&#39;FX_BUG_INFO&#39;,$rows, true, true);for($i&#x3D;0;$i&lt;$rows;$i++)&#123;    $doc-&gt;setValue(&quot;fx_bug_type_info#&quot;.($i+1),$fx_bug_num_ord.&#39; &#39;.$bugInfo[$i][&#39;type&#39;]);    ........... &#125;?&gt;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre><p>按照上面复制块以后 然后再进行变量替换 写好代码以后就可以下载文档了</p><p><img src="https://img.ti0s.com/privacy/2023-04-27/1682578117789_FiP3jz.png" alt="生成效果"></p><h4 id="三、页面功能"><a href="#三、页面功能" class="headerlink" title="三、页面功能"></a>三、页面功能</h4><h5 id="1-登录"><a href="#1-登录" class="headerlink" title="1.登录"></a>1.登录</h5><p><img src="https://img.ti0s.com/privacy/2023-04-27/1682576176443_08Cpk4.png"></p><h5 id="2-首页"><a href="#2-首页" class="headerlink" title="2.首页"></a>2.首页</h5><p><img src="https://img.ti0s.com/privacy/2023-04-27/1682576346813_q9v8Z7.png"></p><h5 id="3-项目列表"><a href="#3-项目列表" class="headerlink" title="3.项目列表"></a>3.项目列表</h5><p><img src="https://img.ti0s.com/privacy/2023-04-27/1682576456992_7I7CuS.png"></p><h5 id="4-添加资产"><a href="#4-添加资产" class="headerlink" title="4.添加资产"></a>4.添加资产</h5><p><img src="https://img.ti0s.com/privacy/2023-04-27/1682576559288_X9skHL.png"></p><h5 id="5-漏洞列表"><a href="#5-漏洞列表" class="headerlink" title="5.漏洞列表"></a>5.漏洞列表</h5><p><img src="https://img.ti0s.com/privacy/2023-04-27/1682576782044_zJXXqH.png"></p><p><img src="https://img.ti0s.com/privacy/2023-04-27/1682577144374_odIUrR.png"></p><h4 id="四、已知问题"><a href="#四、已知问题" class="headerlink" title="四、已知问题"></a>四、已知问题</h4><p>目前已知的BUG 不能直接生成目录 需要下载后手动更新一下</p><p>如果复制块时候发现无法复制时候 复制删除块失效</p><p>在开头添加代码（这是个坑 坑了我一下午的时间）</p><pre class="line-numbers language-PHP" data-language="PHP"><code class="language-PHP">ini_set(&#39;pcre.backtrack_limit&#39;, 999999999);<span aria-hidden="true" class="line-numbers-rows"><span></span></span></code></pre><h4 id="五、参考文档"><a href="#五、参考文档" class="headerlink" title="五、参考文档"></a>五、参考文档</h4><ol><li><p><a href="https://phpword-zh.readthedocs.io/zh_CN/latest/">PHPWORD中文手册</a></p></li><li><p><a href="http://www.shanhuxueyuan.com/news/detail/126.html">PHPWord复制块cloneBlock及删除块deleteBlock无效的解决办法</a></p></li></ol>]]></content>
       
       
       <categories>
           
-          <category> Markdown </category>
+          <category> 安全开发 </category>
           
       </categories>
       
       
         <tags>
             
-            <tag> Typora </tag>
+            <tag> ThinkPHP </tag>
             
-            <tag> Markdown </tag>
-            
-        </tags>
-      
-    </entry>
-    
-    
-    
-    <entry>
-      <title>typora-vue-theme主题介绍</title>
-      <link href="/posts/1002/"/>
-      <url>/posts/1002/</url>
-      
-        <content type="html"><![CDATA[]]></content>
-      
-      
-      <categories>
-          
-          <category> Markdown </category>
-          
-      </categories>
-      
-      
-        <tags>
-            
-            <tag> Typora </tag>
-            
-            <tag> Markdown </tag>
+            <tag> 安全开发 </tag>
             
         </tags>
       
